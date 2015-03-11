@@ -69,16 +69,6 @@
     - name: Start fail2ban service
       service: name=fail2ban state=started enabled=true
 
-    - name: Copy iptables rules
-      copy: src=files/iptables.up
-            dest=/etc/iptables.up
-      notify: reload iptables
-
-    - name: Copy iptables init script # To load iptables on server restart
-      copy: src=files/iptables-script
-            dest=/etc/network/if-pre-up.d/iptables
-            mode=0755
-
     - name: Disallow root SSH access
       action: lineinfile dest=/etc/ssh/sshd_config regexp="^PermitRootLogin" line="PermitRootLogin no" state=present
       notify: Restart sshd
@@ -120,25 +110,32 @@
       copy: src=files/post-receive
             dest=/deploy/hooks/post-receive
             mode=0777
-            
+
     - name: Prepare folders for Haraka Server
       file: path=/haraka state=directory mode="777" recurse=yes
 
     - name: Prepare folders for Deploy
       file: path=/deploy state=directory mode="777" recurse=yes
 
-    - name: Prepare folders for Ghost
-      file: path=/ghost state=directory mode="777" recurse=yes  
-
-    - name: clone Ghost
-      git: repo=https://github.com/dockerfile/ghost dest=/ghost clone=yes update=yes
-
     - name: Install Docker-py module
       pip: name=docker-py
 
-    - name: Install and run Ghost
-      docker: image=dockerfile/ghost ports=80:2368 volumes=/ghost:/ghost-override
+    - name: clone Ghost
+      git: repo=https://github.com/kitematic/ghost dest=/ghost clone=yes update=yes
 
+    - name: Prepare folders for Ghost
+      file: path=/ghost state=directory mode="777" recurse=yes  
+      
+    - name: Copy config.js
+      file: src=files/config.js
+            dest=/ghost/config.example.js
+            mode=0777
+
+    - name: Build repo and shit
+      run: docker build -t ghost /ghost/.
+
+    - name: Launch Ghost
+      docker: image=ghost ports=80:2368
   handlers:
   - name: Restart sshd
     action: service name=ssh state=restarted

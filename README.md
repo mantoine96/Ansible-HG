@@ -43,7 +43,7 @@ $ ssh-copy-id root@$SERVERIP
 $ ansible-playbook haraka-ansible-playbook.yml
 ```
 
-How to deploy your configuration
+How to deploy your mailing list configuration
 --------------------------------
 Log in at least once so that you can change your password.
 

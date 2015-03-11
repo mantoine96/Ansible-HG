@@ -125,10 +125,10 @@
 
     - name: Prepare folders for Ghost
       file: path=/ghost state=directory mode="777" recurse=yes  
-      
-    - name: Copy config.js
-      file: src=files/config.js
-            dest=/ghost/config.example.js
+
+    - name: Copy Dockerfile
+      file: src=files/ghost/Dockerfile
+            dest=/ghost/Dockerfile
             mode=0777
 
     - name: Build repo and shit

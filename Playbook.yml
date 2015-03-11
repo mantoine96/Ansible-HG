@@ -1,0 +1,135 @@
+---
+- hosts: ansible
+  remote_user: root
+
+  vars:
+    # Timezone
+    timezone: 'Europe/Paris'
+
+  tasks:
+
+
+
+    #########################
+    # User management       
+    #########################
+
+    # First, create users
+    - name: Create user {{ user1 }}
+      user: name={{ user1 }}
+            comment="{{ user1 }} user"
+            shell=/bin/bash
+            password={{ password }}
+
+    - name: Kill user's processes
+      command: pkill -u user
+      ignore_errors: yes
+
+    - name: Delete user "user"
+      user: name=user state=absent remove=yes force=yes
+
+    - name: Force-change password {{ user1 }}
+      command: /usr/bin/chage -d 0 {{ user1 }}
+
+    - name: Verify Sudo
+      apt: name=sudo state=latest
+
+    - name: Add {{ user1 }} to sudoers
+      template: src=templates/sudoers-user1.j2
+                dest=/etc/sudoers.d/{{ user1 }}-sudoer
+                validate='visudo -cf %s'
+
+    - name: Add my public key to {{ user1 }}
+      authorized_key: user={{ user1 }}
+                      key="{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+
+     #########################
+     # Time Management       
+     #########################
+
+    - name: Set local timezone
+      copy: content={{ timezone }}
+            dest=/etc/timezone
+      notify: update tzdata
+
+    - name: Install NTP
+      apt: name=ntp state=present
+          update_cache=yes
+
+    - name: Start NTP service
+      service: name=ntp state=started enabled=true
+
+    ##########################
+    # Security               
+    ##########################
+
+    - name: Install fail2ban
+      apt: name=fail2ban state=present
+
+    - name: Start fail2ban service
+      service: name=fail2ban state=started enabled=true
+
+    - name: Copy iptables rules
+      copy: src=files/iptables.up
+            dest=/etc/iptables.up
+      notify: reload iptables
+
+    - name: Copy iptables init script # To load iptables on server restart
+      copy: src=files/iptables-script
+            dest=/etc/network/if-pre-up.d/iptables
+            mode=0755
+
+    - name: Disallow root SSH access
+      action: lineinfile dest=/etc/ssh/sshd_config regexp="^PermitRootLogin" line="PermitRootLogin no" state=present
+      notify: Restart sshd
+
+    ##########################
+    # Software               
+    ##########################
+
+    - name: Update packages
+      apt: update_cache=yes upgrade=yes
+    - name: add the docker repository key
+      apt_key: keyserver=hkp://keyserver.ubuntu.com:80 id=0xD8576A8BA88D21E9 state=present
+
+    - name: add the docker repository
+      apt_repository: repo='deb http://get.docker.io/ubuntu docker main' state=present
+
+    - name: Install Docker
+      apt: pkg=lxc-docker state=present update_cache=true
+
+    - name: Install Git
+      apt: name=git state=present
+
+    - name: Install Vim
+      apt: name=vim state=present
+
+    - name: Install Python-PIP
+      apt: name=python-pip state=present
+
+    - name: Remove Exim4
+      apt: name=exim4* state=absent
+
+    - name: Clone initial repo
+      git: repo=https://github.com/thehunt33r/docker-haraka dest=/haraka clone=yes update=yes
+    - name: Init git repository
+      command: git init /deploy --bare
+
+    - name: Import Git Hook post-receive
+      copy: src=files/post-receive
+            dest=/deploy/hooks/post-receive
+            mode=0777
+
+    - name: Install Docker-py module
+      pip: name=docker-py
+
+    - name: Install and run Ghost
+      docker: image=dockerfile/ghost ports=80:2368
+
+  handlers:
+  - name: Restart sshd
+    action: service name=ssh state=restarted
+  - name: reload iptables
+    action: shell /sbin/iptables-restore < /etc/iptables.up
+  - name: update tzdata
+    command: /usr/sbin/dpkg-reconfigure --frontend noninteractive tzdata

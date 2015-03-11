@@ -112,6 +112,7 @@
 
     - name: Clone initial repo
       git: repo=https://github.com/thehunt33r/docker-haraka dest=/haraka clone=yes update=yes
+
     - name: Init git repository
       command: git init /deploy --bare
 
@@ -119,12 +120,24 @@
       copy: src=files/post-receive
             dest=/deploy/hooks/post-receive
             mode=0777
+            
+    - name: Prepare folders for Haraka Server
+      file: path=/haraka state=directory mode="777" recurse=yes
+
+    - name: Prepare folders for Deploy
+      file: path=/deploy state=directory mode="777" recurse=yes
+
+    - name: Prepare folders for Ghost
+      file: path=/ghost state=directory mode="777" recurse=yes  
+
+    - name: clone Ghost
+      git: repo=https://github.com/dockerfile/ghost dest=/ghost clone=yes update=yes
 
     - name: Install Docker-py module
       pip: name=docker-py
 
     - name: Install and run Ghost
-      docker: image=dockerfile/ghost ports=80:2368
+      docker: image=dockerfile/ghost ports=80:2368 volumes=/ghost:/ghost-override
 
   handlers:
   - name: Restart sshd
